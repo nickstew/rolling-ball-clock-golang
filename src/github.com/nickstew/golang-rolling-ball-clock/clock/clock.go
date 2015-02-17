@@ -1,6 +1,8 @@
 package clock
 
-import "sort"
+import (
+	"sort"
+)
 
 type tray struct {
 	max 		int
@@ -14,7 +16,6 @@ type BallClockTray interface {
 	IsFull() bool
 }
 
-
 type RollingBallClock struct {
 	ballsOnInit int
 	queue 		[]int 
@@ -23,34 +24,22 @@ type RollingBallClock struct {
 	hours 		*tray
 }
 
-type ClockCounter interface {
-	FindCycleDays() int
-}
-
-type QueueStateTracker interface {
-	IsQueueUnchanged() bool
-}
-
 func (t *tray) IsFull() bool {
 	return len(t.balls) == t.max
 }
 
-// TODO: take in the ball to add and return anything to be appended to the queue
-func (t *tray) Add(queue []int) []int {
+func (t *tray) Add(ball int) []int {
 	if t.IsFull() {
 		reverse(t.balls)
-		queue = append(queue, t.balls...)
+		toAppend := t.balls[:]
 		t.balls = nil
 		if t.nextTray == nil {
-			return append(queue[1:], queue[0])
+			return append(toAppend, ball)
 		}
-		return t.nextTray.Add(queue)
+		return append(toAppend, t.nextTray.Add(ball)...)
 
 	} else {
-		t.balls = append(t.balls, queue[0])
-		if(len(queue) > 1) {
-			return queue[1:]
-		}
+		t.balls = append(t.balls, ball)
 		return nil
 	}
 }
@@ -72,7 +61,7 @@ func New(balls int) *RollingBallClock {
 		nextTray: &fiveMinuteTray,
 	}
 	return &RollingBallClock{
-		ballsOnInit: balls,
+		ballsOnInit: balls, 
 		queue: q,
 		minutes: &minuteTray,
 		fiveMinutes: &fiveMinuteTray,
@@ -80,21 +69,26 @@ func New(balls int) *RollingBallClock {
 	}
 }
 
-// TODO: Figure out how to cleanly return a simple int using a channel instaed of bloating memory with all these GOROUTINES
+// TODO: Figure out how to cleanly return a simple int using a channel
 func (c *RollingBallClock) FindCycleDays() int {
 	return c.findCycleDays(0)
 }
 
 func (c *RollingBallClock) findCycleDays(minutes int) int {
-	c.queue = c.minutes.Add(c.queue)
-	minutes += 1
-	if c.IsQueueUnchanged() {
+
+	toAppend := c.minutes.Add(c.queue[0])
+	minutes += 1 // increment minute tracker
+	
+	// Delete ball from queue after adding it to another tray and add any balls that need to be appended to the queue
+	c.queue = append(c.queue[1:], toAppend...)
+
+	if c.matchesInitQueue() {
 		return minutes / 60 / 24
 	}
 	return c.findCycleDays(minutes)
 }
 
-func (c *RollingBallClock) IsQueueUnchanged() bool {
+func (c *RollingBallClock) matchesInitQueue() bool {
 	return len(c.queue) == c.ballsOnInit && sort.IsSorted(sort.IntSlice(c.queue))
 }
 
