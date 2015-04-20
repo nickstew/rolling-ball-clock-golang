@@ -1,95 +1,122 @@
 package clock
 
 import (
+	"fmt"
 	"sort"
 )
 
 type tray struct {
-	max 		int
-	balls 		[]int
-	nextTray 	*tray
-}
-
-// TODO: Move Tray to it's own package
-type BallClockTray interface {
-	Add(queue []int) []int
-	IsFull() bool
+	index    int
+	max      int
+	balls    []int
+	nextTray *tray
 }
 
 type RollingBallClock struct {
 	ballsOnInit int
-	queue 		[]int 
-	minutes 	*tray 
-	fiveMinutes *tray 
-	hours 		*tray
+	qIndex      int
+	queue       []int
+	minutes     *tray
+	fiveMinutes *tray
+	hours       *tray
 }
 
 func (t *tray) IsFull() bool {
-	return len(t.balls) == t.max
+	return t.index+1 == t.max
 }
 
 func (t *tray) Add(ball int) []int {
 	if t.IsFull() {
 		reverse(t.balls)
 		toAppend := t.balls[:]
-		t.balls = nil
+		for i := 0; i < t.max; i += 1 {
+			t.balls[i] = 0
+		}
+		t.index = 0
 		if t.nextTray == nil {
 			return append(toAppend, ball)
 		}
 		return append(toAppend, t.nextTray.Add(ball)...)
 
 	} else {
-		t.balls = append(t.balls, ball)
+		t.balls[t.index] = ball
+		t.index += 1
 		return nil
 	}
 }
 
-func New(balls int) *RollingBallClock { 
-	var q []int
+func New(balls int) *RollingBallClock {
+	q := make([]int, balls)
 	for i := 1; i <= balls; i++ {
-		q = append(q, i)
+		q[i-1] = i
 	}
+	index := balls - 1
+	minBalls := make([]int, 4)
+	fiveBalls := make([]int, 11)
+	hBalls := make([]int, 11)
+
 	hourTray := tray{
-		max: 11,
+		max:   11,
+		balls: hBalls,
 	}
 	fiveMinuteTray := tray{
-		max: 11,
+		max:      11,
+		balls:    fiveBalls,
 		nextTray: &hourTray,
 	}
 	minuteTray := tray{
-		max: 4,
+		max:      4,
+		balls:    minBalls,
 		nextTray: &fiveMinuteTray,
 	}
 	return &RollingBallClock{
-		ballsOnInit: balls, 
-		queue: q,
-		minutes: &minuteTray,
+		ballsOnInit: balls,
+		qIndex:      index,
+		queue:       q,
+		minutes:     &minuteTray,
 		fiveMinutes: &fiveMinuteTray,
-		hours: &hourTray,
+		hours:       &hourTray,
 	}
 }
 
-// TODO: Figure out how to cleanly return a simple int using a channel
 func (c *RollingBallClock) FindCycleDays() int {
-	return c.findCycleDays(0)
+	result := make(chan int)
+	go c.findCycleDays(0, result)
+	answer := <-result
+	return answer
 }
 
-func (c *RollingBallClock) findCycleDays(minutes int) int {
+func (c *RollingBallClock) findCycleDays(minutes int, result chan int) {
 
 	toAppend := c.minutes.Add(c.queue[0])
+
 	minutes += 1 // increment minute tracker
-	
-	// Delete ball from queue after adding it to another tray and add any balls that need to be appended to the queue
-	c.queue = append(c.queue[1:], toAppend...)
-
-	if c.matchesInitQueue() {
-		return minutes / 60 / 24
+	if (minutes)%(60*24) == 0 && 378*24*60 == minutes {
+		fmt.Printf("day: %v\n", minutes/60/24)
+		return
 	}
-	return c.findCycleDays(minutes)
-}
+	// Delete ball from queue after adding it to another tray and add any balls that need to be appended to the queue
+	// 1. delete
+	for i := 0; i < c.qIndex; i = i + 1 {
+		c.queue[i] = c.queue[i+1]
+	}
+	c.queue[c.qIndex] = 0
+	c.qIndex -= 1
 
-func (c *RollingBallClock) matchesInitQueue() bool {
-	return len(c.queue) == c.ballsOnInit && sort.IsSorted(sort.IntSlice(c.queue))
+	//c.queue = c.queue[1:]
+	// 2. add each ball to queue
+	for i := 0; i < len(toAppend); i, c.qIndex = i+1, c.qIndex+1 {
+		//fmt.Println(c.qIndex)
+		c.queue[c.qIndex] = toAppend[i]
+	}
+
+	//c.queue = append(c.queue[1:], toAppend...)
+
+	if c.qIndex+1 == c.ballsOnInit && sort.IsSorted(sort.IntSlice(c.queue)) {
+		result <- (minutes / 60 / 24)
+		return
+	}
+	c.findCycleDays(minutes, result)
 }
 
 func reverse(a []int) {

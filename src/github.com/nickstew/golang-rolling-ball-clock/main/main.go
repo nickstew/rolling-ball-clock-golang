@@ -3,9 +3,9 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"github.com/nickstew/golang-rolling-ball-clock/clock"
 	"os"
 	"strconv"
-	. "github.com/nickstew/golang-rolling-ball-clock/clock"
 )
 
 func ReadClocks() ([]int, error) {
@@ -33,7 +33,7 @@ func main() {
 	if err != nil {
 		fmt.Println("You did not enter a valid integer between 27 and 127.  Please rerun program.")
 	} else {
-		for _, v := range clocks { 
+		for _, v := range clocks {
 			clock := New(v)
 			days := clock.FindCycleDays()
 			fmt.Println(strconv.Itoa(v) + " balls cycle after " + strconv.Itoa(days) + " days.")
