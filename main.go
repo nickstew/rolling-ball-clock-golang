@@ -3,7 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/nickstew/golang-rolling-ball-clock/clock"
+	. "github.com/nickstew/golang-rolling-ball-clock/clock"
 	"os"
 	"strconv"
 )
