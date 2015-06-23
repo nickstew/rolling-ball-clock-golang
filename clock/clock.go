@@ -6,6 +6,7 @@ import (
 )
 
 type tray struct {
+	name	 string
 	index    int
 	max      int
 	balls    []int
@@ -28,8 +29,9 @@ func (t *tray) IsFull() bool {
 func (t *tray) Add(ball int) []int {
 	if t.IsFull() {
 		reverse(t.balls)
-		toAppend := t.balls[:]
-		for i := 0; i < t.max; i += 1 {
+		toAppend := make([]int, t.max-1)
+		copy(toAppend, t.balls[:])
+		for i := 0; i < t.max-1; i += 1 {
 			t.balls[i] = 0
 		}
 		t.index = 0
@@ -45,6 +47,13 @@ func (t *tray) Add(ball int) []int {
 	}
 }
 
+func (t *tray) String() string {
+	return fmt.Sprintf("%v : %v", t.name, t.balls)
+}
+func (c *RollingBallClock) String() string {
+	return fmt.Sprintf("queue: %v\n%v\n%v\n%v", c.queue, c.minutes, c.fiveMinutes, c.hours)
+}
+
 func New(balls int) *RollingBallClock {
 	q := make([]int, balls)
 	for i := 1; i <= balls; i++ {
@@ -56,16 +65,19 @@ func New(balls int) *RollingBallClock {
 	hBalls := make([]int, 11)
 
 	hourTray := tray{
-		max:   11,
+		name:  "hour",
+		max:   12,
 		balls: hBalls,
 	}
 	fiveMinuteTray := tray{
-		max:      11,
+		name:	  "five-minute",
+		max:      12,
 		balls:    fiveBalls,
 		nextTray: &hourTray,
 	}
 	minuteTray := tray{
-		max:      4,
+		name:	  "minute",
+		max:      5,
 		balls:    minBalls,
 		nextTray: &fiveMinuteTray,
 	}
@@ -80,43 +92,34 @@ func New(balls int) *RollingBallClock {
 }
 
 func (c *RollingBallClock) FindCycleDays() int {
-	result := make(chan int)
-	go c.findCycleDays(0, result)
-	answer := <-result
+	answer := c.findCycleDays(0)
 	return answer
 }
 
-func (c *RollingBallClock) findCycleDays(minutes int, result chan int) {
+func (c *RollingBallClock) findCycleDays(minutes int) int {
+	for {
+		toAppend := c.minutes.Add(c.queue[0])
 
-	toAppend := c.minutes.Add(c.queue[0])
+		minutes += 1 // increment minute tracker
+		// Delete ball from queue after adding it to another tray and add any balls that need to be appended to the queue
+		// 1. delete
+		for i := 0; i < c.qIndex; i = i + 1 {
+			c.queue[i] = c.queue[i+1]
+		}
+		c.queue[c.qIndex] = 0
+		c.qIndex -= 1
 
-	minutes += 1 // increment minute tracker
-	if (minutes)%(60*24) == 0 && 378*24*60 == minutes {
-		fmt.Printf("day: %v\n", minutes/60/24)
-		return
+
+		// 2. add each ball to queue
+		for i := 0; i < len(toAppend); i, c.qIndex = i+1, c.qIndex+1 {
+			c.queue[c.qIndex+1] = toAppend[i]
+		}
+
+		//c.queue = append(c.queue[1:], toAppend...)
+		if c.qIndex+1 == c.ballsOnInit && sort.IsSorted(sort.IntSlice(c.queue)) {
+			return (minutes / 60 / 24)
+		}
 	}
-	// Delete ball from queue after adding it to another tray and add any balls that need to be appended to the queue
-	// 1. delete
-	for i := 0; i < c.qIndex; i = i + 1 {
-		c.queue[i] = c.queue[i+1]
-	}
-	c.queue[c.qIndex] = 0
-	c.qIndex -= 1
-
-	//c.queue = c.queue[1:]
-	// 2. add each ball to queue
-	for i := 0; i < len(toAppend); i, c.qIndex = i+1, c.qIndex+1 {
-		//fmt.Println(c.qIndex)
-		c.queue[c.qIndex] = toAppend[i]
-	}
-
-	//c.queue = append(c.queue[1:], toAppend...)
-
-	if c.qIndex+1 == c.ballsOnInit && sort.IsSorted(sort.IntSlice(c.queue)) {
-		result <- (minutes / 60 / 24)
-		return
-	}
-	c.findCycleDays(minutes, result)
 }
 
 func reverse(a []int) {
